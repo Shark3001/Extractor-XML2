@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Extractor de XML a Excel</title>
+    <style>
+        /* Estilos básicos para la página */
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            background-color: #f4f4f4;
+            color: #333;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 800px;
+            width: 90%;
+            background-color: #fff;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+            position: relative;
+        }
+        h1 {
+            color: #0056b3;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        /* Área de arrastrar y soltar */
+        .drag-area {
+            border: 2px dashed #ccc;
+            border-radius: 5px;
+            padding: 50px;
+            text-align: center;
+            font-size: 1.2em;
+            color: #777;
+            cursor: pointer;
+            transition: background-color 0.3s ease, border-color 0.3s ease;
+            margin-bottom: 20px;
+        }
+        .drag-area.highlight {
+            background-color: #e0e0e0;
+            border-color: #007bff;
+        }
+        input[type="file"] {
+            display: none;
+        }
+        /* Lista de archivos */
+        .file-list {
+            margin-top: 20px;
+            border: 1px solid #eee;
+            padding: 10px;
+            border-radius: 5px;
+            min-height: 50px;
+            max-height: 200px;
+            overflow-y: auto;
+            background-color: #f9f9f9;
+        }
+        .file-list p {
+            margin: 5px 0;
+            font-size: 0.9em;
+            color: #555;
+        }
+        /* Etiquetas y campos de texto */
+        label {
+            display: block;
+            margin-top: 20px;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input[type="text"] {
+            width: 100%;
+            padding: 10px;
+            box-sizing: border-box;
+            margin-bottom: 20px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 1em;
+        }
+        /* Botones */
+        button {
+            display: block;
+            width: 100%;
+            padding: 12px 20px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 1.1em;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+            margin-top: 10px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        /* Mensajes flash */
+        .flash-messages {
+            margin-bottom: 20px;
+            padding: 10px;
+            border-radius: 5px;
+        }
+        .flash-messages.success {
+            background-color: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        .flash-messages.error {
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        .flash-messages ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        .flash-messages li {
+            margin-bottom: 5px;
+        }
+        .afc-logo {
+            font-size: 2.5em;
+            font-weight: bold;
+            color: #ff0009;
+            text-align: center;
+            padding-bottom: 5px;
+            border-bottom: 3px solid #ff0009;
+            display: block;
+            margin: 0 auto 30px auto;
+            width: fit-content;
+        }
+        .logout-link {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            color: #007bff;
+            text-decoration: none;
+            font-weight: bold;
+        }
+        .logout-link:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="{{ url_for('logout') }}" class="logout-link">Cerrar Sesión</a>
+        <div class="afc-logo">afc</div>
+
+        <h1>Extractor de XML a Excel</h1>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+            <div class="flash-messages {{ messages[0][0] }}">
+                <ul>
+                    {% for category, message in messages %}
+                        <li>{{ message }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% endif %}
+        {% endwith %}
+
+        <form id="uploadForm" action="/upload" method="post" enctype="multipart/form-data">
+            <label for="numero_receptor">Número de Identificación del Receptor (sin guiones):</label>
+            <input type="text" id="numero_receptor" name="numero_receptor" placeholder="Ej: 3101001234567" required>
+
+            <label>Arrastre sus archivos XML aquí o haga clic para seleccionarlos:</label>
+            <div class="drag-area" id="dragDropArea">
+                <p>Arrastre y suelte los archivos aquí</p>
+                <input type="file" id="xml_files" name="xml_files" multiple accept=".xml">
+            </div>
+            <div class="file-list" id="fileList">
+                <p>Archivos seleccionados: Ninguno</p>
+            </div>
+            
+            <button type="submit">Generar Excel</button>
+            <button type="button" id="clearFilesButton" style="background-color:#dc3545;">Limpiar Archivos</button>
+        </form>
+
+        <p style="text-align:center; margin-top:20px; font-size:0.9em; color:#555;">
+            Desarrollado por 
+            <a href="mailto:jordyam30@gmail.com" style="color:#007bff; text-decoration: none;">
+                Jordy Arias
+            </a>
+        </p>
+    </div>
+
+    <script>
+        const dragDropArea = document.getElementById('dragDropArea');
+        const fileInput = document.getElementById('xml_files');
+        const fileList = document.getElementById('fileList');
+        const clearButton = document.getElementById('clearFilesButton');
+        let selectedFiles = [];
+
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            dragDropArea.addEventListener(eventName, preventDefaults, false);
+            document.body.addEventListener(eventName, preventDefaults, false);
+        });
+
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dragDropArea.addEventListener(eventName, highlight, false);
+        });
+        ['dragleave', 'drop'].forEach(eventName => {
+            dragDropArea.addEventListener(eventName, unhighlight, false);
+        });
+        function highlight(e) { dragDropArea.classList.add('highlight'); }
+        function unhighlight(e) { dragDropArea.classList.remove('highlight'); }
+
+        dragDropArea.addEventListener('drop', handleDrop, false);
+        function handleDrop(e) {
+            const dt = e.dataTransfer;
+            const files = dt.files;
+            handleFiles(files);
+        }
+
+        fileInput.addEventListener('change', (e) => {
+            handleFiles(e.target.files);
+        });
+
+        dragDropArea.addEventListener('click', () => {
+            fileInput.click();
+        });
+
+        function handleFiles(files) {
+            const newFiles = Array.from(files).filter(file => file.type === 'text/xml' || file.name.toLowerCase().endsWith('.xml'));
+            selectedFiles = selectedFiles.concat(newFiles);
+            updateFileList();
+            assignFilesToFileInput(selectedFiles);
+        }
+
+        function updateFileList() {
+            if(selectedFiles.length === 0){
+                fileList.innerHTML = '<p>Archivos seleccionados: Ninguno</p>';
+            } else {
+                let html = '<ul>';
+                selectedFiles.forEach(f => html += `<li>${f.name}</li>`);
+                html += '</ul>';
+                fileList.innerHTML = html;
+            }
+        }
+
+        function assignFilesToFileInput(filesArray){
+            const dataTransfer = new DataTransfer();
+            filesArray.forEach(file => dataTransfer.items.add(file));
+            fileInput.files = dataTransfer.files;
+        }
+
+        // Botón para limpiar archivos
+        clearButton.addEventListener('click', () => {
+            selectedFiles = [];
+            updateFileList();
+            assignFilesToFileInput([]);
+        });
+    </script>
+</body>
+</html>
