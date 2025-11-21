@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: extractor-xml
+    env: python
+    region: oregon
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "gunicorn --bind 0.0.0.0:$PORT app:app"
+    envVars:
+      - key: SECRET_KEY_APP_XML
+        value: "suFfkjsdfflkjsdflkjsdflkjsdfkj984saadfkj"
+      - key: APP_PASSWORD
+        value: "AFC2024*"   # cámbiala en Render cuando quieras
