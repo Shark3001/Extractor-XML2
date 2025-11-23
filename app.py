@@ -15,7 +15,14 @@ CORRECT_PASSWORD = os.getenv("APP_PASSWORD", "AFC2024*")
 def formatear_numero(valor):
     if valor is None:
         return ""
-    return str(valor).replace(".", ",")
+    # Aseguramos dos decimales para formato de presentación
+    try:
+        if isinstance(valor, (int, float)):
+            return f"{valor:.2f}".replace('.', ',')
+        return str(valor).replace(".", ",")
+    except:
+        return str(valor).replace(".", ",")
+
 
 def formatear_fecha(fecha_str):
     if fecha_str:
@@ -56,7 +63,7 @@ def extraer_datos_xml_en_memoria(xml_files, numero_receptor_filtro):
 
     # --- HOJA facturas_resumidas ---
     ws_resumidas = wb.create_sheet(title="facturas_resumidas")
-    # INICIO DE CAMBIOS SOLICITADOS EN ENCABEZADOS DE HOJA RESUMIDA (SE AGREGA TOTAL COMPROBANTE)
+    # INICIO DE CAMBIOS SOLICITADOS EN ENCABEZADOS DE HOJA RESUMIDA (Orden ajustado)
     headers_resumidas = [
         "Consecutivo",
         "Detalle",
@@ -65,9 +72,9 @@ def extraer_datos_xml_en_memoria(xml_files, numero_receptor_filtro):
         "Subtotal",
         "Total Descuentos",
         "Total Impuesto",
-        "Total Comprobante",  # <--- COLUMNA AGREGADA
         "Otros Cargos",
-        "Número Receptor"
+        "Número Receptor",
+        "Total Comprobante"  # <--- COLUMNA MOVÍDA AL FINAL
     ]
     # FIN DE CAMBIOS SOLICITADOS EN ENCABEZADOS DE HOJA RESUMIDA
     ws_resumidas.append(headers_resumidas)
@@ -115,9 +122,10 @@ def extraer_datos_xml_en_memoria(xml_files, numero_receptor_filtro):
                 # LÓGICA DE CONCATENACIÓN DE DETALLE
                 detalle_texto = "; ".join([linea.find('Detalle').text if linea.find('Detalle') is not None else "" for linea in lineas_detalle])
                 
-                # Calcular el Subtotal de la factura sumando los SubTotales de las líneas
+                # Cálculo del Subtotal de la factura sumando los SubTotales de las líneas
                 for linea in lineas_detalle:
                     subtotal_linea_str = linea.find('SubTotal').text if linea.find('SubTotal') is not None else "0"
+                    # ESTO SUMA LOS SUBTOTALES DE LAS LÍNEAS EN UNA SOLA VARIABLE DE FACTURA (Requisito 2)
                     subtotal_factura += convertir_numero(subtotal_linea_str)
 
             # --- facturas_detalladas ---
@@ -175,18 +183,18 @@ def extraer_datos_xml_en_memoria(xml_files, numero_receptor_filtro):
                     ws_detalladas.append(fila_detallada)
 
             # --- facturas_resumidas ---
-            # INICIO DE CAMBIOS SOLICITADOS EN LLENADO DE HOJA RESUMIDA
+            # INICIO DE CAMBIOS SOLICITADOS EN LLENADO DE HOJA RESUMIDA (Orden de Total Comprobante al final y ajuste de formato Subtotal)
             fila_resumida = [
                 consecutivo,
                 detalle_texto,
                 convertir_fecha_excel(fecha),
                 codigo_moneda,
-                convertir_numero(formatear_numero(subtotal_factura)), # <--- AJUSTE 1: Formateo y conversión para mantener decimales
+                subtotal_factura, # <--- Se usa el float calculado (la función formatear_numero ya no se llama aquí)
                 convertir_numero(total_descuentos),
                 convertir_numero(total_impuesto),
-                convertir_numero(total_comprobante), # <--- AJUSTE 2: COLUMNA AGREGADA
                 convertir_numero(otros_cargos),
-                numero_receptor
+                numero_receptor,
+                convertir_numero(total_comprobante) # <--- COLUMNA MOVÍDA AL FINAL
             ]
             # FIN DE CAMBIOS SOLICITADOS EN LLENADO DE HOJA RESUMIDA
             ws_resumidas.append(fila_resumida)
@@ -206,18 +214,26 @@ def extraer_datos_xml_en_memoria(xml_files, numero_receptor_filtro):
             cell.fill = fill_rojo
 
     # --- Formato colores facturas_resumidas ---
-    # AJUSTE: NUEVOS ÍNDICES DE COLUMNAS AZULES
-    # Consecutivo: 1, Detalle: 2, Fecha: 3, Código Moneda: 4, Subtotal: 5, Total Descuentos: 6, Total Impuesto: 7, Total Comprobante: 8, Otros Cargos: 9, Número Receptor: 10
-    col_azul_res = [1, 3, 5, 7, 8, 9] # Columnas: Consecutivo, Fecha, Subtotal, Total Impuesto, Total Comprobante, Otros Cargos
+    # AJUSTE: NUEVOS ÍNDICES DE COLUMNAS AZULES (10 columnas ahora)
+    # Consecutivo: 1, Fecha: 3, Subtotal: 5, Total Descuentos: 6, Total Impuesto: 7, Otros Cargos: 8, Total Comprobante: 10
+    col_azul_res = [1, 3, 5, 6, 7, 8, 10]
     for col_idx in col_azul_res:
         for cell in list(ws_resumidas.columns)[col_idx-1]:
             cell.fill = fill_celeste
             
-    # La columna "Número Receptor" ahora es la 10 (índice 9)
+    # La columna "Número Receptor" ahora es la 9 (índice 8)
     for fila in ws_resumidas.iter_rows(min_row=2):
-        cell = fila[9] # Columna 10 (Índice 9) es el Número Receptor
+        cell = fila[8] # Columna 9 (Índice 8) es el Número Receptor
         if cell.value and numero_receptor_filtro and str(cell.value) != str(numero_receptor_filtro):
             cell.fill = fill_rojo
+        
+        # AJUSTE: Aplicar formato numérico a las columnas de montos (Subtotal, Total Descuentos, Total Impuesto, Otros Cargos, Total Comprobante)
+        # 5: Subtotal, 6: T. Descuentos, 7: T. Impuesto, 8: Otros Cargos, 10: T. Comprobante
+        for col_index_to_format in [4, 5, 6, 7, 9]:
+            cell_to_format = fila[col_index_to_format]
+            if isinstance(cell_to_format.value, (int, float)):
+                cell_to_format.number_format = '#,##0.00'
+
 
     out = io.BytesIO()
     wb.save(out)
