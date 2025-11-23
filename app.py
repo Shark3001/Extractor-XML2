@@ -232,35 +232,31 @@ def extraer_datos_xml_en_memoria(xml_files, numero_receptor_filtro):
 
     # --- Formato colores facturas_resumidas ---
     
-    # 📌 AJUSTE CRÍTICO: Columnas a las que NO se les debe quitar el color.
-    # Total de 10 columnas (1 a 10)
-    # 1: Consecutivo (QUITAR)
-    # 2: Detalle (MANTENER) -> Índice 1
-    # 3: Fecha (QUITAR)
-    # 4: Código Moneda (MANTENER) -> Índice 3
-    # 5: Subtotal (QUITAR)
-    # 6: Total Descuentos (MANTENER) -> Índice 5
-    # 7: Total Impuesto (QUITAR)
-    # 8: Otros Cargos (QUITAR)
-    # 9: Número Receptor (ROJO si no coincide, SIN RELLENO si coincide)
-    # 10: Total Comprobante (QUITAR)
+    # 📌 AJUSTE CRÍTICO: Se eliminan todas las columnas de la lista de relleno azul para dejar solo el formato de color rojo.
     
-    # Indices 0-based de las columnas que DEBEN seguir azules: Detalle (1), Código Moneda (3), Total Descuentos (5)
-    col_indices_azules_resumidas = [1, 3, 5] 
+    # Indices 0-based de las columnas que DEBEN seguir azules: ¡NINGUNA!
+    col_indices_azules_resumidas = [] 
     
-    # Aplicar color azul a las columnas seleccionadas
+    # Aplicar color azul a las columnas seleccionadas (esta parte ya no hace nada)
     for col_idx in col_indices_azules_resumidas:
-        # list(ws_resumidas.columns)[col_idx] obtiene la columna completa por índice
         for cell in list(ws_resumidas.columns)[col_idx]: 
             cell.fill = fill_celeste
             
     # La columna "Número Receptor" es la 9 (índice 8). Solo se aplica rojo o se deja sin relleno.
     for fila in ws_resumidas.iter_rows(min_row=2):
         cell_receptor = fila[8] # Columna 9 (Índice 8)
+        
+        # Primero aseguramos que todas las demás celdas de la fila no tengan relleno (blanco)
+        # Recorremos la fila para eliminar cualquier relleno residual si no fue manejado por la lista de índices vacía.
+        for i, cell in enumerate(fila):
+            # Solo aplicamos el relleno vacío si no es la celda del Número Receptor
+            if i != 8:
+                cell.fill = PatternFill(fill_type=None)
+            
+        # Aplicamos el color rojo (si aplica) o el relleno vacío
         if cell_receptor.value and numero_receptor_filtro and str(cell_receptor.value) != str(numero_receptor_filtro):
             cell_receptor.fill = fill_rojo
         else:
-            # Asegurar que no tenga color si coincide o está vacío (si se aplicó azul antes por error)
             cell_receptor.fill = PatternFill(fill_type=None)
         
         # APLICACIÓN DE FORMATO NUMÉRICO EXPLICITO
