@@ -30,11 +30,12 @@ def formatear_fecha(fecha_str):
             return fecha_str
     return ""
 
-# 🔥 NUEVA FUNCIÓN convertida y corregida
 def convertir_numero(valor):
     if valor is None or valor == "":
         return 0
     limpio = str(valor).replace(" ", "").replace("\xa0", "")
+    # Si la entrada ya viene sin separador de miles pero con coma decimal (ej: "1000,50")
+    # la siguiente línea convierte: "1.000,50" -> "1000,50" -> "1000.50"
     limpio = limpio.replace(".", "").replace(",", ".")
     try:
         return float(limpio)
@@ -115,6 +116,13 @@ def extraer_datos_xml_en_memoria(xml_files, numero_receptor_filtro):
                     subtotal_linea_str = linea.find('SubTotal').text if linea.find('SubTotal') is not None else "0"
                     subtotal_factura += convertir_numero(subtotal_linea_str)
 
+            # Aseguramos que subtotal_factura sea float con 2 decimales reales
+            try:
+                subtotal_factura = float(subtotal_factura)
+            except:
+                subtotal_factura = 0.0
+            subtotal_factura = round(subtotal_factura, 2)
+
             # facturas_detalladas
             if detalles_servicio is not None:
                 for linea in detalles_servicio.findall('LineaDetalle'):
@@ -163,9 +171,18 @@ def extraer_datos_xml_en_memoria(xml_files, numero_receptor_filtro):
             ]
             ws_resumidas.append(fila_resumida)
 
-            # 🔥 NUEVO FORMATEO CORRECTO PARA NUMÉRICOS
+            # FORZAMOS el valor y formato de Subtotal (columna 5)
             fila_actual = ws_resumidas.max_row
-            for col_idx in [5, 6, 7, 8, 10]:
+            cel_subtotal = ws_resumidas.cell(row=fila_actual, column=5)
+            # reasignar como float redondeado a 2 decimales
+            try:
+                cel_subtotal.value = float(round(float(cel_subtotal.value), 2))
+            except:
+                cel_subtotal.value = float(subtotal_factura)
+            cel_subtotal.number_format = '#,##0.00'
+
+            # Formateo adicional para otras columnas numéricas de la fila
+            for col_idx in [6, 7, 8, 10]:
                 celda = ws_resumidas.cell(row=fila_actual, column=col_idx)
                 if isinstance(celda.value, (int, float)):
                     celda.number_format = '#,##0.00'
@@ -265,4 +282,3 @@ def upload_files():
 
 if __name__ == '__main__':
     app.run(debug=False)
-
