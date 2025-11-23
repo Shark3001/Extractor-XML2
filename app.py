@@ -119,7 +119,7 @@ def extraer_datos_xml_en_memoria(xml_files, numero_receptor_filtro):
                 # LÓGICA DE CONCATENACIÓN DE DETALLE
                 detalle_texto = "; ".join([linea.find('Detalle').text if linea.find('Detalle') is not None else "" for linea in lineas_detalle])
                 
-                # CÁLCULO DEL SUBTOTAL: Suma de SubTotales de líneas (Requisito cumplido)
+                # CÁLCULO DEL SUBTOTAL: Suma de SubTotales de líneas 
                 for linea in lineas_detalle:
                     subtotal_linea_str = linea.find('SubTotal').text if linea.find('SubTotal') is not None else "0"
                     subtotal_factura += convertir_numero(subtotal_linea_str)
@@ -179,13 +179,13 @@ def extraer_datos_xml_en_memoria(xml_files, numero_receptor_filtro):
                     ws_detalladas.append(fila_detallada)
 
             # --- facturas_resumidas ---
-            # CORRECCIÓN DE FORMATO: Forzar el float de subtotal con el mismo método de conversión que el resto.
+            # CORRECCIÓN DE FORMATO: Insertamos el float puro, forzando el formato al final.
             fila_resumida = [
                 consecutivo,
                 detalle_texto,
                 convertir_fecha_excel(fecha),
                 codigo_moneda,
-                convertir_numero(formatear_numero(subtotal_factura)), # <-- APLICA FORMATO y luego lo convierte a float
+                subtotal_factura, # <-- Insertamos el float con decimales
                 convertir_numero(total_descuentos),
                 convertir_numero(total_impuesto),
                 convertir_numero(otros_cargos),
@@ -222,15 +222,15 @@ def extraer_datos_xml_en_memoria(xml_files, numero_receptor_filtro):
         if cell_receptor.value and numero_receptor_filtro and str(cell_receptor.value) != str(numero_receptor_filtro):
             cell_receptor.fill = fill_rojo
         
-        # AJUSTE: Aplicar formato numérico '#,##0.00' a las columnas de montos.
-        # Esto asegura que los números flotantes, incluido Subtotal, muestren los decimales.
+        # APLICACIÓN DE FORMATO NUMÉRICO EXPLICITO
         # Índices de columnas de monto (0-based):
         # 4: Subtotal, 5: T. Descuentos, 6: T. Impuesto, 7: Otros Cargos, 9: T. Comprobante
         column_indices_to_format = [4, 5, 6, 7, 9] 
         for col_index_to_format in column_indices_to_format:
             cell_to_format = fila[col_index_to_format]
             if isinstance(cell_to_format.value, (int, float)):
-                cell_to_format.number_format = '#,##0.00' # <-- Formato que incluye dos decimales.
+                # Este formato es el que asegura la visualización de los dos decimales
+                cell_to_format.number_format = '#,##0.00' 
 
 
     out = io.BytesIO()
