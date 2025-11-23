@@ -30,10 +30,16 @@ def formatear_fecha(fecha_str):
             return fecha_str
     return ""
 
+# 🔥 NUEVA FUNCIÓN convertida y corregida
 def convertir_numero(valor):
     if valor is None or valor == "":
         return 0
-    return float(str(valor).replace(".", "").replace(",", "."))
+    limpio = str(valor).replace(" ", "").replace("\xa0", "")
+    limpio = limpio.replace(".", "").replace(",", ".")
+    try:
+        return float(limpio)
+    except:
+        return 0
 
 def convertir_fecha_excel(fecha_str):
     if fecha_str:
@@ -61,16 +67,8 @@ def extraer_datos_xml_en_memoria(xml_files, numero_receptor_filtro):
     # HOJA facturas_resumidas
     ws_resumidas = wb.create_sheet(title="facturas_resumidas")
     headers_resumidas = [
-        "Consecutivo",
-        "Detalle",
-        "Fecha",
-        "Código Moneda",
-        "Subtotal",
-        "Total Descuentos",
-        "Total Impuesto",
-        "Otros Cargos",
-        "Número Receptor",
-        "Total Comprobante"
+        "Consecutivo","Detalle","Fecha","Código Moneda","Subtotal",
+        "Total Descuentos","Total Impuesto","Otros Cargos","Número Receptor","Total Comprobante"
     ]
     ws_resumidas.append(headers_resumidas)
 
@@ -102,7 +100,7 @@ def extraer_datos_xml_en_memoria(xml_files, numero_receptor_filtro):
             total_exonerado = formatear_numero(resumen_factura.find('TotalExonerado').text) if resumen_factura is not None and resumen_factura.find('TotalExonerado') is not None else ""
             total_impuesto = formatear_numero(resumen_factura.find('TotalImpuesto').text) if resumen_factura is not None and resumen_factura.find('TotalImpuesto') is not None else ""
             total_comprobante = formatear_numero(resumen_factura.find('TotalComprobante').text) if resumen_factura is not None and resumen_factura.find('TotalComprobante') is not None else ""
-            otros_cargos = formatear_numero(root.find('OtrosCargos/MontoCargo').text) if root.find('OtrosCargos/MontoCargo') is not None else "0,00"
+            otros_cargos = formatear_numero(root.find('OtrosCargos/MontoCargo').text) if root.find('OtrosCargos/MontoCargo') is not None else 0
             codigo_moneda = root.find('ResumenFactura/CodigoTipoMoneda/CodigoMoneda').text if root.find('ResumenFactura/CodigoTipoMoneda/CodigoMoneda') is not None else ""
 
             detalles_servicio = root.find('DetalleServicio')
@@ -122,32 +120,31 @@ def extraer_datos_xml_en_memoria(xml_files, numero_receptor_filtro):
                 for linea in detalles_servicio.findall('LineaDetalle'):
                     codigo_cabys = linea.find('Codigo').text if linea.find('Codigo') is not None else ""
                     detalle = linea.find('Detalle').text if linea.find('Detalle') is not None else ""
-                    cantidad = formatear_numero(linea.find('Cantidad').text) if linea.find('Cantidad') is not None else ""
-                    precio_unitario = formatear_numero(linea.find('PrecioUnitario').text) if linea.find('PrecioUnitario') is not None else ""
-                    monto_total_linea = formatear_numero(linea.find('MontoTotal').text) if linea.find('MontoTotal') is not None else ""
-                    monto_descuento_linea = formatear_numero(linea.find('Descuento/MontoDescuento').text) if linea.find('Descuento/MontoDescuento') is not None else "0,00"
-                    subtotal_linea = formatear_numero(linea.find('SubTotal').text) if linea.find('SubTotal') is not None else ""
+                    cantidad = convertir_numero(linea.find('Cantidad').text) if linea.find('Cantidad') is not None else 0
+                    precio_unitario = convertir_numero(linea.find('PrecioUnitario').text) if linea.find('PrecioUnitario') is not None else 0
+                    monto_total_linea = convertir_numero(linea.find('MontoTotal').text) if linea.find('MontoTotal') is not None else 0
+                    monto_descuento_linea = convertir_numero(linea.find('Descuento/MontoDescuento').text) if linea.find('Descuento/MontoDescuento') is not None else 0
+                    subtotal_linea = convertir_numero(linea.find('SubTotal').text) if linea.find('SubTotal') is not None else 0
                     impuesto = linea.find('Impuesto')
-                    tarifa_linea = formatear_numero(impuesto.find('Tarifa').text) if impuesto is not None and impuesto.find('Tarifa') is not None else "0,00"
-                    monto_impuesto_linea = formatear_numero(impuesto.find('Monto').text) if impuesto is not None and impuesto.find('Monto') is not None else "0,00"
-                    impuesto_neto_linea = formatear_numero(linea.find('ImpuestoNeto').text) if linea.find('ImpuestoNeto') is not None else ""
-                    codigo_moneda_linea = codigo_moneda
-                    tipo_cambio = formatear_numero(root.find('ResumenFactura/CodigoTipoMoneda/TipoCambio').text) if root.find('ResumenFactura/CodigoTipoMoneda/TipoCambio') is not None else ""
-                    total_gravado = formatear_numero(root.find('ResumenFactura/TotalGravado').text) if root.find('ResumenFactura/TotalGravado') is not None else ""
+                    tarifa_linea = convertir_numero(impuesto.find('Tarifa').text) if impuesto is not None and impuesto.find('Tarifa') is not None else 0
+                    monto_impuesto_linea = convertir_numero(impuesto.find('Monto').text) if impuesto is not None and impuesto.find('Monto') is not None else 0
+                    impuesto_neto_linea = convertir_numero(linea.find('ImpuestoNeto').text) if linea.find('ImpuestoNeto') is not None else 0
+                    tipo_cambio = convertir_numero(root.find('ResumenFactura/CodigoTipoMoneda/TipoCambio').text) if root.find('ResumenFactura/CodigoTipoMoneda/TipoCambio') is not None else 0
+                    total_gravado = convertir_numero(root.find('ResumenFactura/TotalGravado').text) if root.find('ResumenFactura/TotalGravado') is not None else 0
 
                     fila_detallada = [
                         clave, consecutivo, convertir_fecha_excel(fecha), nombre_emisor, numero_emisor,
                         nombre_receptor, numero_receptor, codigo_cabys, detalle,
-                        convertir_numero(cantidad), convertir_numero(precio_unitario),
-                        convertir_numero(monto_total_linea), convertir_numero(monto_descuento_linea),
-                        convertir_numero(subtotal_linea), convertir_numero(tarifa_linea),
-                        convertir_numero(monto_impuesto_linea), convertir_numero(impuesto_neto_linea),
-                        codigo_moneda_linea, convertir_numero(tipo_cambio),
-                        convertir_numero(total_gravado), convertir_numero(total_exento),
+                        cantidad, precio_unitario,
+                        monto_total_linea, monto_descuento_linea,
+                        subtotal_linea, tarifa_linea,
+                        monto_impuesto_linea, impuesto_neto_linea,
+                        codigo_moneda, tipo_cambio,
+                        total_gravado, convertir_numero(total_exento),
                         convertir_numero(total_exonerado), convertir_numero(total_venta),
                         convertir_numero(total_descuentos), convertir_numero(total_venta_neta),
                         convertir_numero(total_impuesto), convertir_numero(total_comprobante),
-                        convertir_numero(otros_cargos), filename, tipo_documento
+                        otros_cargos, filename, tipo_documento
                     ]
                     ws_detalladas.append(fila_detallada)
 
@@ -166,8 +163,12 @@ def extraer_datos_xml_en_memoria(xml_files, numero_receptor_filtro):
             ]
             ws_resumidas.append(fila_resumida)
 
-            # *** AJUSTE NUEVO SOLO PARA SUBTOTAL ***
-            ws_resumidas.cell(row=ws_resumidas.max_row, column=5).number_format = '#,##0.00'
+            # 🔥 NUEVO FORMATEO CORRECTO PARA NUMÉRICOS
+            fila_actual = ws_resumidas.max_row
+            for col_idx in [5, 6, 7, 8, 10]:
+                celda = ws_resumidas.cell(row=fila_actual, column=col_idx)
+                if isinstance(celda.value, (int, float)):
+                    celda.number_format = '#,##0.00'
 
         except Exception as e:
             flash(f"Error al procesar '{filename}': {e}", 'error')
@@ -264,3 +265,4 @@ def upload_files():
 
 if __name__ == '__main__':
     app.run(debug=False)
+
