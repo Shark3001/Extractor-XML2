@@ -75,12 +75,9 @@ def extraer_datos_xml_en_memoria(xml_files, numero_receptor_filtro):
         "Total Impuesto",
         "Otros Cargos",
         "Número Receptor",
-        "Total Comprobante"  # COLUMNA MOVÍDA AL FINAL
+        "Total Comprobante"  # COLUMNA AL FINAL
     ]
     ws_resumidas.append(headers_resumidas)
-
-    # Variables para calcular el Subtotal
-    subtotal_factura = 0
 
     for uploaded_file in xml_files:
         filename = uploaded_file.filename
@@ -122,7 +119,7 @@ def extraer_datos_xml_en_memoria(xml_files, numero_receptor_filtro):
                 # LÓGICA DE CONCATENACIÓN DE DETALLE
                 detalle_texto = "; ".join([linea.find('Detalle').text if linea.find('Detalle') is not None else "" for linea in lineas_detalle])
                 
-                # Cálculo del Subtotal de la factura (Suma de SubTotales de líneas)
+                # CÁLCULO DEL SUBTOTAL: Suma de SubTotales de líneas (Requisito cumplido)
                 for linea in lineas_detalle:
                     subtotal_linea_str = linea.find('SubTotal').text if linea.find('SubTotal') is not None else "0"
                     subtotal_factura += convertir_numero(subtotal_linea_str)
@@ -182,13 +179,13 @@ def extraer_datos_xml_en_memoria(xml_files, numero_receptor_filtro):
                     ws_detalladas.append(fila_detallada)
 
             # --- facturas_resumidas ---
-            # Se usa el float calculado 'subtotal_factura'
+            # CORRECCIÓN DE FORMATO: Forzar el float de subtotal con el mismo método de conversión que el resto.
             fila_resumida = [
                 consecutivo,
                 detalle_texto,
                 convertir_fecha_excel(fecha),
                 codigo_moneda,
-                subtotal_factura, 
+                convertir_numero(formatear_numero(subtotal_factura)), # <-- APLICA FORMATO y luego lo convierte a float
                 convertir_numero(total_descuentos),
                 convertir_numero(total_impuesto),
                 convertir_numero(otros_cargos),
