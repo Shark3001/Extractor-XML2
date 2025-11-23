@@ -15,15 +15,12 @@ CORRECT_PASSWORD = os.getenv("APP_PASSWORD", "AFC2024*")
 def formatear_numero(valor):
     if valor is None:
         return ""
-    # Aseguramos dos decimales para formato de presentación
     try:
-        # Se asegura que si es un número, se muestre con dos decimales usando la coma como separador de decimales.
         if isinstance(valor, (int, float)):
             return f"{valor:.2f}".replace('.', ',')
         return str(valor).replace(".", ",")
     except:
         return str(valor).replace(".", ",")
-
 
 def formatear_fecha(fecha_str):
     if fecha_str:
@@ -36,7 +33,6 @@ def formatear_fecha(fecha_str):
 def convertir_numero(valor):
     if valor is None or valor == "":
         return 0
-    # Reemplaza comas por punto para float
     return float(str(valor).replace(".", "").replace(",", "."))
 
 def convertir_fecha_excel(fecha_str):
@@ -50,7 +46,7 @@ def convertir_fecha_excel(fecha_str):
 def extraer_datos_xml_en_memoria(xml_files, numero_receptor_filtro):
     wb = openpyxl.Workbook()
 
-    # --- HOJA facturas_detalladas ---
+    # HOJA facturas_detalladas
     ws_detalladas = wb.active
     ws_detalladas.title = "facturas_detalladas"
     headers_detalladas = [
@@ -62,9 +58,8 @@ def extraer_datos_xml_en_memoria(xml_files, numero_receptor_filtro):
     ]
     ws_detalladas.append(headers_detalladas)
 
-    # --- HOJA facturas_resumidas ---
+    # HOJA facturas_resumidas
     ws_resumidas = wb.create_sheet(title="facturas_resumidas")
-    # ENCABEZADOS DE HOJA RESUMIDA
     headers_resumidas = [
         "Consecutivo",
         "Detalle",
@@ -75,7 +70,7 @@ def extraer_datos_xml_en_memoria(xml_files, numero_receptor_filtro):
         "Total Impuesto",
         "Otros Cargos",
         "Número Receptor",
-        "Total Comprobante"  # COLUMNA AL FINAL
+        "Total Comprobante"
     ]
     ws_resumidas.append(headers_resumidas)
 
@@ -109,22 +104,20 @@ def extraer_datos_xml_en_memoria(xml_files, numero_receptor_filtro):
             total_comprobante = formatear_numero(resumen_factura.find('TotalComprobante').text) if resumen_factura is not None and resumen_factura.find('TotalComprobante') is not None else ""
             otros_cargos = formatear_numero(root.find('OtrosCargos/MontoCargo').text) if root.find('OtrosCargos/MontoCargo') is not None else "0,00"
             codigo_moneda = root.find('ResumenFactura/CodigoTipoMoneda/CodigoMoneda').text if root.find('ResumenFactura/CodigoTipoMoneda/CodigoMoneda') is not None else ""
-            
+
             detalles_servicio = root.find('DetalleServicio')
             detalle_texto = ""
-            subtotal_factura = 0 # Inicializar o resetear el subtotal
+            subtotal_factura = 0
 
             if detalles_servicio is not None:
                 lineas_detalle = detalles_servicio.findall('LineaDetalle')
-                # LÓGICA DE CONCATENACIÓN DE DETALLE
                 detalle_texto = "; ".join([linea.find('Detalle').text if linea.find('Detalle') is not None else "" for linea in lineas_detalle])
-                
-                # CÁLCULO DEL SUBTOTAL: Suma de SubTotales de líneas 
+
                 for linea in lineas_detalle:
                     subtotal_linea_str = linea.find('SubTotal').text if linea.find('SubTotal') is not None else "0"
                     subtotal_factura += convertir_numero(subtotal_linea_str)
 
-            # --- facturas_detalladas ---
+            # facturas_detalladas
             if detalles_servicio is not None:
                 for linea in detalles_servicio.findall('LineaDetalle'):
                     codigo_cabys = linea.find('Codigo').text if linea.find('Codigo') is not None else ""
@@ -138,66 +131,48 @@ def extraer_datos_xml_en_memoria(xml_files, numero_receptor_filtro):
                     tarifa_linea = formatear_numero(impuesto.find('Tarifa').text) if impuesto is not None and impuesto.find('Tarifa') is not None else "0,00"
                     monto_impuesto_linea = formatear_numero(impuesto.find('Monto').text) if impuesto is not None and impuesto.find('Monto') is not None else "0,00"
                     impuesto_neto_linea = formatear_numero(linea.find('ImpuestoNeto').text) if linea.find('ImpuestoNeto') is not None else ""
-                    codigo_moneda_linea = root.find('ResumenFactura/CodigoTipoMoneda/CodigoMoneda').text if root.find('ResumenFactura/CodigoTipoMoneda/CodigoMoneda') is not None else ""
+                    codigo_moneda_linea = codigo_moneda
                     tipo_cambio = formatear_numero(root.find('ResumenFactura/CodigoTipoMoneda/TipoCambio').text) if root.find('ResumenFactura/CodigoTipoMoneda/TipoCambio') is not None else ""
                     total_gravado = formatear_numero(root.find('ResumenFactura/TotalGravado').text) if root.find('ResumenFactura/TotalGravado') is not None else ""
-                    total_comprobante_linea = total_comprobante
-                    otros_cargos_linea = otros_cargos
 
                     fila_detallada = [
-                        clave,
-                        consecutivo,
-                        convertir_fecha_excel(fecha),
-                        nombre_emisor,
-                        numero_emisor,
-                        nombre_receptor,
-                        numero_receptor,
-                        codigo_cabys,
-                        detalle,
-                        convertir_numero(cantidad),
-                        convertir_numero(precio_unitario),
-                        convertir_numero(monto_total_linea),
-                        convertir_numero(monto_descuento_linea),
-                        convertir_numero(subtotal_linea),
-                        convertir_numero(tarifa_linea),
-                        convertir_numero(monto_impuesto_linea),
-                        convertir_numero(impuesto_neto_linea),
-                        codigo_moneda_linea,
-                        convertir_numero(tipo_cambio),
-                        convertir_numero(total_gravado),
-                        convertir_numero(total_exento),
-                        convertir_numero(total_exonerado),
-                        convertir_numero(total_venta),
-                        convertir_numero(total_descuentos),
-                        convertir_numero(total_venta_neta),
-                        convertir_numero(total_impuesto),
-                        convertir_numero(total_comprobante_linea),
-                        convertir_numero(otros_cargos_linea),
-                        filename,
-                        tipo_documento
+                        clave, consecutivo, convertir_fecha_excel(fecha), nombre_emisor, numero_emisor,
+                        nombre_receptor, numero_receptor, codigo_cabys, detalle,
+                        convertir_numero(cantidad), convertir_numero(precio_unitario),
+                        convertir_numero(monto_total_linea), convertir_numero(monto_descuento_linea),
+                        convertir_numero(subtotal_linea), convertir_numero(tarifa_linea),
+                        convertir_numero(monto_impuesto_linea), convertir_numero(impuesto_neto_linea),
+                        codigo_moneda_linea, convertir_numero(tipo_cambio),
+                        convertir_numero(total_gravado), convertir_numero(total_exento),
+                        convertir_numero(total_exonerado), convertir_numero(total_venta),
+                        convertir_numero(total_descuentos), convertir_numero(total_venta_neta),
+                        convertir_numero(total_impuesto), convertir_numero(total_comprobante),
+                        convertir_numero(otros_cargos), filename, tipo_documento
                     ]
                     ws_detalladas.append(fila_detallada)
 
-            # --- facturas_resumidas ---
-            # CORRECCIÓN DE FORMATO: Insertamos el float puro, forzando el formato al final.
+            # facturas_resumidas
             fila_resumida = [
                 consecutivo,
                 detalle_texto,
                 convertir_fecha_excel(fecha),
                 codigo_moneda,
-                subtotal_factura, # <-- Insertamos el float con decimales
+                subtotal_factura,
                 convertir_numero(total_descuentos),
                 convertir_numero(total_impuesto),
                 convertir_numero(otros_cargos),
                 numero_receptor,
-                convertir_numero(total_comprobante) 
+                convertir_numero(total_comprobante)
             ]
             ws_resumidas.append(fila_resumida)
+
+            # *** AJUSTE NUEVO SOLO PARA SUBTOTAL ***
+            ws_resumidas.cell(row=ws_resumidas.max_row, column=5).number_format = '#,##0.00'
 
         except Exception as e:
             flash(f"Error al procesar '{filename}': {e}", 'error')
 
-    # --- Formato colores facturas_detalladas ---
+    # Formato facturas_detalladas
     fill_celeste = PatternFill(start_color="ADD8E6", end_color="ADD8E6", fill_type="solid")
     fill_rojo = PatternFill(start_color="FFAAAA", end_color="FFAAAA", fill_type="solid")
     col_azul = ["B","C","I","P","V","X","Y","AC"]
@@ -208,36 +183,27 @@ def extraer_datos_xml_en_memoria(xml_files, numero_receptor_filtro):
         if cell.value and numero_receptor_filtro and str(cell.value) != str(numero_receptor_filtro):
             cell.fill = fill_rojo
 
-    # --- Formato colores facturas_resumidas ---
-    # AJUSTE DE ÍNDICES: (10 columnas)
-    # Consecutivo: 1, Fecha: 3, Subtotal: 5, Total Descuentos: 6, Total Impuesto: 7, Otros Cargos: 8, Total Comprobante: 10
+    # Formato facturas_resumidas
     col_azul_res = [1, 3, 5, 6, 7, 8, 10]
     for col_idx in col_azul_res:
         for cell in list(ws_resumidas.columns)[col_idx-1]:
             cell.fill = fill_celeste
-            
-    # La columna "Número Receptor" es la 9 (índice 8)
+
     for fila in ws_resumidas.iter_rows(min_row=2):
-        cell_receptor = fila[8] # Columna 9 (Índice 8)
+        cell_receptor = fila[8]
         if cell_receptor.value and numero_receptor_filtro and str(cell_receptor.value) != str(numero_receptor_filtro):
             cell_receptor.fill = fill_rojo
         
-        # APLICACIÓN DE FORMATO NUMÉRICO EXPLICITO
-        # Índices de columnas de monto (0-based):
-        # 4: Subtotal, 5: T. Descuentos, 6: T. Impuesto, 7: Otros Cargos, 9: T. Comprobante
-        column_indices_to_format = [4, 5, 6, 7, 9] 
+        column_indices_to_format = [4, 5, 6, 7, 9]
         for col_index_to_format in column_indices_to_format:
             cell_to_format = fila[col_index_to_format]
             if isinstance(cell_to_format.value, (int, float)):
-                # Este formato es el que asegura la visualización de los dos decimales
-                cell_to_format.number_format = '#,##0.00' 
-
+                cell_to_format.number_format = '#,##0.00'
 
     out = io.BytesIO()
     wb.save(out)
     out.seek(0)
 
-    # Limpiar archivos en memoria
     xml_files.clear()
     return out
 
