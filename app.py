@@ -95,9 +95,31 @@ def extraer_datos_xml_en_memoria(xml_files, numero_receptor_filtro):
         "Total Impuesto",
         "Otros Cargos",
         "Número Receptor",
-        "Total Comprobante"  # COLUMNA AL FINAL
+        "Total Comprobante" 
     ]
     ws_resumidas.append(headers_resumidas)
+
+    # --- HOJA facturas_resumidasV2 (NUEVA HOJA) ---
+    ws_resumidas_v2 = wb.create_sheet(title="facturas_resumidasV2")
+    # ENCABEZADOS DE HOJA RESUMIDA V2
+    headers_resumidas_v2 = [
+        "Consecutivo",
+        "Fecha",
+        "Nombre Emisor",
+        "Número Emisor",
+        "Nombre Receptor",
+        "Número Receptor",
+        "Tarifa (%)", # Se tomará la tarifa de la primera línea de detalle o un promedio si se necesita, pero generalmente se usa el campo de resumen si existe. Como no existe en resumen, usaremos la tarifa de la primera línea (como proxy).
+        "Total Descuentos",
+        "Total Venta Neta",
+        "Total Impuesto",
+        "Total Comprobante",
+        "Otros Cargos",
+        "Archivo",
+        "Tipo de Documento"
+    ]
+    ws_resumidas_v2.append(headers_resumidas_v2)
+
 
     for uploaded_file in xml_files:
         filename = uploaded_file.filename
@@ -119,17 +141,14 @@ def extraer_datos_xml_en_memoria(xml_files, numero_receptor_filtro):
             nombre_receptor = root.find('Receptor/Nombre').text if root.find('Receptor/Nombre') is not None else ""
             numero_receptor = root.find('Receptor/Identificacion/Numero').text if root.find('Receptor/Identificacion/Numero') is not None else ""
             
-            # 📌 INICIO DE CAMBIO: Obtener fecha corta (dd-mm-yy)
+            # 📌 Obtener fecha corta (dd-mm-yy) para la concatenación
             fecha_dd_mm_yy = ""
             if fecha and fecha != "":
                 try:
-                    # Convertir 'dd-mm-YYYY' string (generado por formatear_fecha) a datetime object
                     dt_object = datetime.strptime(fecha, '%d-%m-%Y') 
-                    # Formatear a 'dd-mm-yy'
                     fecha_dd_mm_yy = dt_object.strftime('%d-%m-%y')
                 except ValueError:
-                    fecha_dd_mm_yy = fecha # Fallback si el formato es inesperado
-            # 📌 FIN DE CAMBIO
+                    fecha_dd_mm_yy = fecha 
 
             resumen_factura = root.find('ResumenFactura')
             total_venta = formatear_numero(resumen_factura.find('TotalVenta').text) if resumen_factura is not None and resumen_factura.find('TotalVenta') is not None else ""
@@ -143,8 +162,9 @@ def extraer_datos_xml_en_memoria(xml_files, numero_receptor_filtro):
             codigo_moneda = root.find('ResumenFactura/CodigoTipoMoneda/CodigoMoneda').text if root.find('ResumenFactura/CodigoTipoMoneda/CodigoMoneda') is not None else ""
             
             detalles_servicio = root.find('DetalleServicio')
-            detalle_texto = "" # Esta será la cadena final concatenada
-            subtotal_factura = 0 # Inicializar o resetear el subtotal
+            detalle_texto = "" # Cadena final concatenada para facturas_resumidas
+            subtotal_factura = 0 
+            tarifa_resumen = "0,00" # Tarifa para facturas_resumidasV2
 
             if detalles_servicio is not None:
                 lineas_detalle = detalles_servicio.findall('LineaDetalle')
@@ -152,22 +172,26 @@ def extraer_datos_xml_en_memoria(xml_files, numero_receptor_filtro):
                 # LÓGICA DE CONCATENACIÓN DE DETALLE DE LÍNEAS EXISTENTE
                 detalle_texto_lineas = "; ".join([linea.find('Detalle').text if linea.find('Detalle') is not None else "" for linea in lineas_detalle])
                 
-                # 📌 CONCATENACIÓN FINAL REQUERIDA: Fecha corta + Nombre Emisor + Detalles de líneas
+                # CONCATENACIÓN FINAL REQUERIDA: Fecha corta + Nombre Emisor + Detalles de líneas
                 detalle_texto = f"{fecha_dd_mm_yy} - {nombre_emisor} - {detalle_texto_lineas}"
                 
                 # CÁLCULO DEL SUBTOTAL: Suma de SubTotales de líneas 
                 for linea in lineas_detalle:
                     subtotal_linea_str = linea.find('SubTotal').text if linea.find('SubTotal') is not None else "0"
                     subtotal_factura += convertir_numero(subtotal_linea_str)
+                    
+                    # Obtener la tarifa de la primera línea como proxy para Tarifa (%) en V2
+                    if tarifa_resumen == "0,00":
+                        impuesto = linea.find('Impuesto')
+                        tarifa_resumen = formatear_numero(impuesto.find('Tarifa').text) if impuesto is not None and impuesto.find('Tarifa') is not None else "0,00"
             else:
-                # 📌 CONCATENACIÓN FINAL si no hay detalles de línea
+                # CONCATENACIÓN FINAL si no hay detalles de línea
                 detalle_texto = f"{fecha_dd_mm_yy} - {nombre_emisor} - (Sin detalles)"
 
 
             # --- facturas_detalladas ---
             if detalles_servicio is not None:
                 for linea in detalles_servicio.findall('LineaDetalle'):
-                    # ... (El resto del código de facturas_detalladas no cambia)
                     codigo_cabys = linea.find('Codigo').text if linea.find('Codigo') is not None else ""
                     detalle = linea.find('Detalle').text if linea.find('Detalle') is not None else ""
                     cantidad = formatear_numero(linea.find('Cantidad').text) if linea.find('Cantidad') is not None else ""
@@ -220,7 +244,6 @@ def extraer_datos_xml_en_memoria(xml_files, numero_receptor_filtro):
                     ws_detalladas.append(fila_detallada)
 
             # --- facturas_resumidas ---
-            # Se utiliza el nuevo 'detalle_texto' concatenado
             fila_resumida = [
                 consecutivo,
                 detalle_texto, 
@@ -234,6 +257,26 @@ def extraer_datos_xml_en_memoria(xml_files, numero_receptor_filtro):
                 convertir_numero(total_comprobante) 
             ]
             ws_resumidas.append(fila_resumida)
+            
+            # --- facturas_resumidasV2 (NUEVA FILA) ---
+            fila_resumida_v2 = [
+                consecutivo,
+                convertir_fecha_excel(fecha),
+                nombre_emisor,
+                numero_emisor,
+                nombre_receptor,
+                numero_receptor,
+                convertir_numero(tarifa_resumen), # Usamos el valor proxy de la primera línea
+                convertir_numero(total_descuentos),
+                convertir_numero(total_venta_neta),
+                convertir_numero(total_impuesto),
+                convertir_numero(total_comprobante),
+                convertir_numero(otros_cargos),
+                filename,
+                tipo_documento
+            ]
+            ws_resumidas_v2.append(fila_resumida_v2)
+
 
         except Exception as e:
             flash(f"Error al procesar '{filename}': {e}", 'error')
@@ -252,32 +295,51 @@ def extraer_datos_xml_en_memoria(xml_files, numero_receptor_filtro):
             cell.fill = fill_rojo
 
     # --- Formato colores facturas_resumidas ---
-    
-    # Aseguramos que solo se aplique el color rojo si no coincide el filtro.
     for fila in ws_resumidas.iter_rows(min_row=2):
         cell_receptor = fila[8] # Columna 9 (Índice 8)
         
-        # Eliminar cualquier relleno residual en toda la fila (incluyendo Detalle, Código Moneda, T. Descuentos)
         for i, cell in enumerate(fila):
-            # Solo aplicamos el relleno vacío si no es la celda del Número Receptor
             if i != 8:
                 cell.fill = PatternFill(fill_type=None)
             
-        # Aplicamos el color rojo (si aplica) o el relleno vacío
         if cell_receptor.value and numero_receptor_filtro and str(cell_receptor.value) != str(numero_receptor_filtro):
             cell_receptor.fill = fill_rojo
         else:
             cell_receptor.fill = PatternFill(fill_type=None)
         
         # APLICACIÓN DE FORMATO NUMÉRICO EXPLICITO
-        # Índices de columnas de monto (0-based):
-        # 4: Subtotal, 5: T. Descuentos, 6: T. Impuesto, 7: Otros Cargos, 9: T. Comprobante
+        # Índices de columnas de monto (0-based): 4: Subtotal, 5: T. Descuentos, 6: T. Impuesto, 7: Otros Cargos, 9: T. Comprobante
         column_indices_to_format = [4, 5, 6, 7, 9] 
         for col_index_to_format in column_indices_to_format:
             cell_to_format = fila[col_index_to_format]
             if isinstance(cell_to_format.value, (int, float)):
-                # Este formato es el que asegura la visualización de los dos decimales
                 cell_to_format.number_format = '#,##0.00' 
+                
+    # --- Formato colores facturas_resumidasV2 (NUEVO FORMATO) ---
+    for fila in ws_resumidas_v2.iter_rows(min_row=2):
+        cell_receptor_v2 = fila[5] # Columna 6 (Número Receptor, Índice 5)
+        cell_tarifa_v2 = fila[6] # Columna 7 (Tarifa (%), Índice 6)
+        
+        # Eliminamos relleno de todas las celdas (deberían estar blancas)
+        for i, cell in enumerate(fila):
+             cell.fill = PatternFill(fill_type=None)
+            
+        # Aplicamos el color rojo (si aplica) al Número Receptor
+        if cell_receptor_v2.value and numero_receptor_filtro and str(cell_receptor_v2.value) != str(numero_receptor_filtro):
+            cell_receptor_v2.fill = fill_rojo
+        
+        # APLICACIÓN DE FORMATO NUMÉRICO EXPLICITO
+        # Índices de columnas de monto (0-based) en V2:
+        # 6: Tarifa (%), 7: T. Descuentos, 8: T. Venta Neta, 9: T. Impuesto, 10: T. Comprobante, 11: Otros Cargos
+        column_indices_to_format_v2 = [6, 7, 8, 9, 10, 11] 
+        for col_index_to_format in column_indices_to_format_v2:
+            cell_to_format = fila[col_index_to_format]
+            if isinstance(cell_to_format.value, (int, float)):
+                # La tarifa lleva formato de porcentaje con 2 decimales
+                if col_index_to_format == 6:
+                    cell_to_format.number_format = '0.00%'
+                else:
+                    cell_to_format.number_format = '#,##0.00' 
 
 
     out = io.BytesIO()
@@ -345,4 +407,3 @@ def upload_files():
 
 if __name__ == '__main__':
     app.run(debug=False)
-
