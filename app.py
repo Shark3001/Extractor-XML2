@@ -109,7 +109,7 @@ def extraer_datos_xml_en_memoria(xml_files, numero_receptor_filtro):
         "Número Emisor",
         "Nombre Receptor",
         "Número Receptor",
-        "Tarifa (%)", # Se tomará la tarifa de la primera línea de detalle o un promedio si se necesita, pero generalmente se usa el campo de resumen si existe. Como no existe en resumen, usaremos la tarifa de la primera línea (como proxy).
+        "Tarifa (%)",
         "Total Descuentos",
         "Total Venta Neta",
         "Total Impuesto",
@@ -141,7 +141,7 @@ def extraer_datos_xml_en_memoria(xml_files, numero_receptor_filtro):
             nombre_receptor = root.find('Receptor/Nombre').text if root.find('Receptor/Nombre') is not None else ""
             numero_receptor = root.find('Receptor/Identificacion/Numero').text if root.find('Receptor/Identificacion/Numero') is not None else ""
             
-            # 📌 Obtener fecha corta (dd-mm-yy) para la concatenación
+            # Obtener fecha corta (dd-mm-yy) para la concatenación
             fecha_dd_mm_yy = ""
             if fecha and fecha != "":
                 try:
@@ -266,7 +266,8 @@ def extraer_datos_xml_en_memoria(xml_files, numero_receptor_filtro):
                 numero_emisor,
                 nombre_receptor,
                 numero_receptor,
-                convertir_numero(tarifa_resumen), # Usamos el valor proxy de la primera línea
+                # 📌 CORRECCIÓN DE FORMATO: Dividimos por 100 el valor numérico de la tarifa
+                convertir_numero(tarifa_resumen) / 100, 
                 convertir_numero(total_descuentos),
                 convertir_numero(total_venta_neta),
                 convertir_numero(total_impuesto),
@@ -318,7 +319,6 @@ def extraer_datos_xml_en_memoria(xml_files, numero_receptor_filtro):
     # --- Formato colores facturas_resumidasV2 (NUEVO FORMATO) ---
     for fila in ws_resumidas_v2.iter_rows(min_row=2):
         cell_receptor_v2 = fila[5] # Columna 6 (Número Receptor, Índice 5)
-        cell_tarifa_v2 = fila[6] # Columna 7 (Tarifa (%), Índice 6)
         
         # Eliminamos relleno de todas las celdas (deberían estar blancas)
         for i, cell in enumerate(fila):
