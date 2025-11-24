@@ -105,16 +105,16 @@ def extraer_datos_xml_en_memoria(xml_files, numero_receptor_filtro):
 
     # --- HOJA facturas_resumidasV2 (NUEVA HOJA) ---
     ws_resumidas_v2 = wb.create_sheet(title="facturas_resumidasV2")
-    # ENCABEZADOS DE HOJA RESUMIDA V2 (Actualizados)
+    # ENCABEZADOS DE HOJA RESUMIDA V2
     headers_resumidas_v2 = [
         "Consecutivo",      # 0
         "Fecha",            # 1
-        "Detalle",          # 2 (NUEVO)
+        "Detalle",          # 2 
         "Nombre Emisor",    # 3 
         "Número Emisor",    # 4 
         "Nombre Receptor",  # 5 
         "Número Receptor",  # 6 
-        "Código Moneda",    # 7 (NUEVO)
+        "Código Moneda",    # 7 
         "Tarifa (%)",       # 8 
         "Total Descuentos", # 9 
         "Total Venta Neta", # 10 
@@ -165,21 +165,22 @@ def extraer_datos_xml_en_memoria(xml_files, numero_receptor_filtro):
             total_impuesto = formatear_numero(resumen_factura.find('TotalImpuesto').text) if resumen_factura is not None and resumen_factura.find('TotalImpuesto') is not None else ""
             total_comprobante = formatear_numero(resumen_factura.find('TotalComprobante').text) if resumen_factura is not None and resumen_factura.find('TotalComprobante') is not None else ""
             otros_cargos = formatear_numero(root.find('OtrosCargos/MontoCargo').text) if root.find('OtrosCargos/MontoCargo') is not None else "0,00"
-            # Se extrae el código moneda para ambas hojas
             codigo_moneda = root.find('ResumenFactura/CodigoTipoMoneda/CodigoMoneda').text if root.find('ResumenFactura/CodigoTipoMoneda/CodigoMoneda') is not None else ""
             
             detalles_servicio = root.find('DetalleServicio')
-            detalle_texto = "" # Cadena final concatenada para facturas_resumidasV2
+            detalle_texto = "" # Detalle COMPLETO (Fecha - Emisor - Detalle) para facturas_resumidas
+            detalle_simple_v2 = "" # Detalle SOLO DE PRODUCTOS/SERVICIOS para facturas_resumidasV2
             subtotal_factura = 0 
             tarifa_resumen = "0,00" # Tarifa para facturas_resumidasV2
 
             if detalles_servicio is not None:
                 lineas_detalle = detalles_servicio.findall('LineaDetalle')
                 
-                # LÓGICA DE CONCATENACIÓN DE DETALLE DE LÍNEAS EXISTENTE
+                # LÓGICA DE CONCATENACIÓN DE DETALLE DE LÍNEAS (solo productos/servicios)
                 detalle_texto_lineas = "; ".join([linea.find('Detalle').text if linea.find('Detalle') is not None else "" for linea in lineas_detalle])
-                
-                # CONCATENACIÓN FINAL REQUERIDA: Fecha corta + Nombre Emisor + Detalles de líneas
+                detalle_simple_v2 = detalle_texto_lineas # USADO EN V2: SOLO PRODUCTOS/SERVICIOS
+
+                # CONCATENACIÓN COMPLETA PARA facturas_resumidas: Fecha corta + Nombre Emisor + Detalles de líneas
                 detalle_texto = f"{fecha_dd_mm_yy} - {nombre_emisor} - {detalle_texto_lineas}"
                 
                 # CÁLCULO DEL SUBTOTAL: Suma de SubTotales de líneas 
@@ -192,8 +193,9 @@ def extraer_datos_xml_en_memoria(xml_files, numero_receptor_filtro):
                         impuesto = linea.find('Impuesto')
                         tarifa_resumen = formatear_numero(impuesto.find('Tarifa').text) if impuesto is not None and impuesto.find('Tarifa') is not None else "0,00"
             else:
-                # CONCATENACIÓN FINAL si no hay detalles de línea
+                # CONCATENACIÓN COMPLETA si no hay detalles de línea
                 detalle_texto = f"{fecha_dd_mm_yy} - {nombre_emisor} - (Sin detalles)"
+                detalle_simple_v2 = "(Sin detalles)"
 
 
             # --- facturas_detalladas ---
@@ -250,10 +252,10 @@ def extraer_datos_xml_en_memoria(xml_files, numero_receptor_filtro):
                     ]
                     ws_detalladas.append(fila_detallada)
 
-            # --- facturas_resumidas ---
+            # --- facturas_resumidas (Detalle COMPLETO) ---
             fila_resumida = [
                 consecutivo,
-                detalle_texto, 
+                detalle_texto, # Usa el detalle completo (Fecha - Emisor - Detalle)
                 convertir_fecha_excel(fecha),
                 codigo_moneda,
                 subtotal_factura, 
@@ -265,16 +267,16 @@ def extraer_datos_xml_en_memoria(xml_files, numero_receptor_filtro):
             ]
             ws_resumidas.append(fila_resumida)
             
-            # --- facturas_resumidasV2 (NUEVA FILA con Detalle y Código Moneda) ---
+            # --- facturas_resumidasV2 (Detalle SIMPLE) ---
             fila_resumida_v2 = [
                 consecutivo,                                     # 0
                 convertir_fecha_excel(fecha),                    # 1
-                detalle_texto,                                   # 2 (NUEVO)
+                detalle_simple_v2,                               # 2 (Ajustado: SOLO productos/servicios)
                 nombre_emisor,                                   # 3
                 numero_emisor,                                   # 4
                 nombre_receptor,                                 # 5
                 numero_receptor,                                 # 6
-                codigo_moneda,                                   # 7 (NUEVO)
+                codigo_moneda,                                   # 7
                 convertir_numero(tarifa_resumen) / 100,          # 8 (Tarifa %)
                 convertir_numero(total_descuentos),              # 9
                 convertir_numero(total_venta_neta),              # 10
@@ -322,19 +324,11 @@ def extraer_datos_xml_en_memoria(xml_files, numero_receptor_filtro):
             if isinstance(cell_to_format.value, (int, float)):
                 cell_to_format.number_format = '#,##0.00' 
                 
-    # --- Formato colores facturas_resumidasV2 (ACTUALIZADO) ---
-    # Índices base 0 de las columnas que deben ir en AZUL (incluyendo las nuevas):
-    # 0: Consecutivo, 1: Fecha, 2: Detalle (NUEVO), 4: Número Emisor, 7: Código Moneda (NUEVO)
-    # 8: Tarifa (%), 9: Total Descuentos, 10: Total Venta Neta, 11: Total Impuesto
-    # 12: Total Comprobante, 13: Otros Cargos, 15: Tipo de Documento
+    # --- Formato colores facturas_resumidasV2 ---
+    # Índices base 0 de las columnas que deben ir en AZUL:
     col_indices_azul_v2 = [0, 1, 2, 4, 7, 8, 9, 10, 11, 12, 13, 15]
-    
-    # Índice del Número Receptor para el check ROJO (ahora es el índice 6)
-    idx_num_receptor = 6
-    
-    # Índices de columnas con formato numérico (monetario o porcentaje)
-    # 8: Tarifa (%), 9: T. Descuentos, 10: T. Venta Neta, 11: T. Impuesto, 12: T. Comprobante, 13: Otros Cargos
-    column_indices_to_format_v2 = [8, 9, 10, 11, 12, 13] 
+    idx_num_receptor = 6 # Índice del Número Receptor
+    column_indices_to_format_v2 = [8, 9, 10, 11, 12, 13] # Índices numéricos
 
     for fila in ws_resumidas_v2.iter_rows(min_row=2):
         cell_receptor_v2 = fila[idx_num_receptor] 
@@ -342,7 +336,7 @@ def extraer_datos_xml_en_memoria(xml_files, numero_receptor_filtro):
         # 1. Aplicar color azul o ningún color (excepto al Número Receptor)
         for i, cell in enumerate(fila):
              if i == idx_num_receptor:
-                 continue # Se manejará por separado para el color rojo
+                 continue
              
              if i in col_indices_azul_v2:
                  cell.fill = fill_celeste
@@ -353,7 +347,7 @@ def extraer_datos_xml_en_memoria(xml_files, numero_receptor_filtro):
         if cell_receptor_v2.value and numero_receptor_filtro and str(cell_receptor_v2.value) != str(numero_receptor_filtro):
             cell_receptor_v2.fill = fill_rojo
         else:
-             cell_receptor_v2.fill = PatternFill(fill_type=None) # Si coincide, debe ir sin relleno
+             cell_receptor_v2.fill = PatternFill(fill_type=None)
         
         # 3. APLICACIÓN DE FORMATO NUMÉRICO
         for col_index_to_format in column_indices_to_format_v2:
