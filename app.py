@@ -70,6 +70,10 @@ def convertir_fecha_excel(fecha_str):
 def extraer_datos_xml_en_memoria(xml_files, numero_receptor_filtro):
     wb = openpyxl.Workbook()
 
+    # --- Colores ---
+    fill_celeste = PatternFill(start_color="ADD8E6", end_color="ADD8E6", fill_type="solid")
+    fill_rojo = PatternFill(start_color="FFAAAA", end_color="FFAAAA", fill_type="solid")
+    
     # --- HOJA facturas_detalladas ---
     ws_detalladas = wb.active
     ws_detalladas.title = "facturas_detalladas"
@@ -266,7 +270,7 @@ def extraer_datos_xml_en_memoria(xml_files, numero_receptor_filtro):
                 numero_emisor,
                 nombre_receptor,
                 numero_receptor,
-                # 📌 CORRECCIÓN DE FORMATO: Dividimos por 100 el valor numérico de la tarifa
+                # CORRECCIÓN DE FORMATO: Dividimos por 100 el valor numérico de la tarifa
                 convertir_numero(tarifa_resumen) / 100, 
                 convertir_numero(total_descuentos),
                 convertir_numero(total_venta_neta),
@@ -283,11 +287,9 @@ def extraer_datos_xml_en_memoria(xml_files, numero_receptor_filtro):
             flash(f"Error al procesar '{filename}': {e}", 'error')
 
     # --- Formato colores facturas_detalladas ---
-    fill_celeste = PatternFill(start_color="ADD8E6", end_color="ADD8E6", fill_type="solid")
-    fill_rojo = PatternFill(start_color="FFAAAA", end_color="FFAAAA", fill_type="solid")
     # Columnas azules en hoja detallada: B, C, I, P, V, X, Y, AC
-    col_azul = ["B","C","I","P","V","X","Y","AC"]
-    for col in col_azul:
+    col_azul_detalladas = ["B","C","I","P","V","X","Y","AC"]
+    for col in col_azul_detalladas:
         for cell in ws_detalladas[col]:
             cell.fill = fill_celeste
     # Columna roja en hoja detallada (Número Receptor): G
@@ -316,17 +318,39 @@ def extraer_datos_xml_en_memoria(xml_files, numero_receptor_filtro):
             if isinstance(cell_to_format.value, (int, float)):
                 cell_to_format.number_format = '#,##0.00' 
                 
-    # --- Formato colores facturas_resumidasV2 (NUEVO FORMATO) ---
+    # --- Formato colores facturas_resumidasV2 (NUEVO FORMATO DE COLOR) ---
+    # Columnas solicitadas para color AZUL (índices 0-based):
+    # Consecutivo (0)
+    # Fecha (1)
+    # Número Emisor (3)
+    # Tarifa (%) (6)
+    # Total Descuentos (7)
+    # Total Venta Neta (8)
+    # Total Impuesto (9)
+    # Total Comprobante (10)
+    # Otros Cargos (11)
+    # Tipo de Documento (13)
+    col_indices_azul_v2 = [0, 1, 3, 6, 7, 8, 9, 10, 11, 13]
+    
     for fila in ws_resumidas_v2.iter_rows(min_row=2):
         cell_receptor_v2 = fila[5] # Columna 6 (Número Receptor, Índice 5)
         
-        # Eliminamos relleno de todas las celdas (deberían estar blancas)
         for i, cell in enumerate(fila):
-             cell.fill = PatternFill(fill_type=None)
+             # Aplicar azul a las columnas solicitadas
+             if i in col_indices_azul_v2:
+                 cell.fill = fill_celeste
+             else:
+                 cell.fill = PatternFill(fill_type=None)
             
-        # Aplicamos el color rojo (si aplica) al Número Receptor
+        # Aplicamos el color rojo (si aplica) al Número Receptor (columna 5)
+        # Esto sobrescribe el relleno si se hubiera aplicado por error en el ciclo anterior
         if cell_receptor_v2.value and numero_receptor_filtro and str(cell_receptor_v2.value) != str(numero_receptor_filtro):
             cell_receptor_v2.fill = fill_rojo
+        else:
+             # Aseguramos que las celdas de Número Receptor que SÍ coinciden estén sin relleno
+            if cell_receptor_v2.fill.start_color.rgb != fill_celeste.start_color.rgb:
+                 cell_receptor_v2.fill = PatternFill(fill_type=None)
+
         
         # APLICACIÓN DE FORMATO NUMÉRICO EXPLICITO
         # Índices de columnas de monto (0-based) en V2:
