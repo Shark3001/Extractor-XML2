@@ -39,11 +39,6 @@ def convertir_numero(valor):
     
     s_valor = str(valor)
     
-    # 1. Limpiamos cualquier separador de miles (asumiendo que puede ser punto o coma)
-    # y luego reemplazamos el separador decimal por punto.
-    # Dado el error que mencionas, el problema es que el código anterior
-    # ELIMINABA AMBOS (punto y coma) en algún momento.
-    
     # Nuevo enfoque estricto para evitar la multiplicación por error de formato:
     
     # Si detectamos una coma (',') y un punto ('.') en la cadena:
@@ -123,6 +118,18 @@ def extraer_datos_xml_en_memoria(xml_files, numero_receptor_filtro):
             numero_emisor = root.find('Emisor/Identificacion/Numero').text if root.find('Emisor/Identificacion/Numero') is not None else ""
             nombre_receptor = root.find('Receptor/Nombre').text if root.find('Receptor/Nombre') is not None else ""
             numero_receptor = root.find('Receptor/Identificacion/Numero').text if root.find('Receptor/Identificacion/Numero') is not None else ""
+            
+            # 📌 INICIO DE CAMBIO: Obtener fecha corta (dd-mm-yy)
+            fecha_dd_mm_yy = ""
+            if fecha and fecha != "":
+                try:
+                    # Convertir 'dd-mm-YYYY' string (generado por formatear_fecha) a datetime object
+                    dt_object = datetime.strptime(fecha, '%d-%m-%Y') 
+                    # Formatear a 'dd-mm-yy'
+                    fecha_dd_mm_yy = dt_object.strftime('%d-%m-%y')
+                except ValueError:
+                    fecha_dd_mm_yy = fecha # Fallback si el formato es inesperado
+            # 📌 FIN DE CAMBIO
 
             resumen_factura = root.find('ResumenFactura')
             total_venta = formatear_numero(resumen_factura.find('TotalVenta').text) if resumen_factura is not None and resumen_factura.find('TotalVenta') is not None else ""
@@ -136,22 +143,31 @@ def extraer_datos_xml_en_memoria(xml_files, numero_receptor_filtro):
             codigo_moneda = root.find('ResumenFactura/CodigoTipoMoneda/CodigoMoneda').text if root.find('ResumenFactura/CodigoTipoMoneda/CodigoMoneda') is not None else ""
             
             detalles_servicio = root.find('DetalleServicio')
-            detalle_texto = ""
+            detalle_texto = "" # Esta será la cadena final concatenada
             subtotal_factura = 0 # Inicializar o resetear el subtotal
 
             if detalles_servicio is not None:
                 lineas_detalle = detalles_servicio.findall('LineaDetalle')
-                # LÓGICA DE CONCATENACIÓN DE DETALLE
-                detalle_texto = "; ".join([linea.find('Detalle').text if linea.find('Detalle') is not None else "" for linea in lineas_detalle])
+                
+                # LÓGICA DE CONCATENACIÓN DE DETALLE DE LÍNEAS EXISTENTE
+                detalle_texto_lineas = "; ".join([linea.find('Detalle').text if linea.find('Detalle') is not None else "" for linea in lineas_detalle])
+                
+                # 📌 CONCATENACIÓN FINAL REQUERIDA: Fecha corta + Nombre Emisor + Detalles de líneas
+                detalle_texto = f"{fecha_dd_mm_yy} - {nombre_emisor} - {detalle_texto_lineas}"
                 
                 # CÁLCULO DEL SUBTOTAL: Suma de SubTotales de líneas 
                 for linea in lineas_detalle:
                     subtotal_linea_str = linea.find('SubTotal').text if linea.find('SubTotal') is not None else "0"
                     subtotal_factura += convertir_numero(subtotal_linea_str)
+            else:
+                # 📌 CONCATENACIÓN FINAL si no hay detalles de línea
+                detalle_texto = f"{fecha_dd_mm_yy} - {nombre_emisor} - (Sin detalles)"
+
 
             # --- facturas_detalladas ---
             if detalles_servicio is not None:
                 for linea in detalles_servicio.findall('LineaDetalle'):
+                    # ... (El resto del código de facturas_detalladas no cambia)
                     codigo_cabys = linea.find('Codigo').text if linea.find('Codigo') is not None else ""
                     detalle = linea.find('Detalle').text if linea.find('Detalle') is not None else ""
                     cantidad = formatear_numero(linea.find('Cantidad').text) if linea.find('Cantidad') is not None else ""
@@ -204,13 +220,13 @@ def extraer_datos_xml_en_memoria(xml_files, numero_receptor_filtro):
                     ws_detalladas.append(fila_detallada)
 
             # --- facturas_resumidas ---
-            # Se inserta el float puro que contiene la suma correcta.
+            # Se utiliza el nuevo 'detalle_texto' concatenado
             fila_resumida = [
                 consecutivo,
-                detalle_texto,
+                detalle_texto, 
                 convertir_fecha_excel(fecha),
                 codigo_moneda,
-                subtotal_factura, # <-- Insertamos el float correcto
+                subtotal_factura, 
                 convertir_numero(total_descuentos),
                 convertir_numero(total_impuesto),
                 convertir_numero(otros_cargos),
@@ -225,26 +241,33 @@ def extraer_datos_xml_en_memoria(xml_files, numero_receptor_filtro):
     # --- Formato colores facturas_detalladas ---
     fill_celeste = PatternFill(start_color="ADD8E6", end_color="ADD8E6", fill_type="solid")
     fill_rojo = PatternFill(start_color="FFAAAA", end_color="FFAAAA", fill_type="solid")
+    # Columnas azules en hoja detallada: B, C, I, P, V, X, Y, AC
     col_azul = ["B","C","I","P","V","X","Y","AC"]
     for col in col_azul:
         for cell in ws_detalladas[col]:
             cell.fill = fill_celeste
+    # Columna roja en hoja detallada (Número Receptor): G
     for cell in ws_detalladas["G"][1:]:
         if cell.value and numero_receptor_filtro and str(cell.value) != str(numero_receptor_filtro):
             cell.fill = fill_rojo
 
     # --- Formato colores facturas_resumidas ---
-    # AJUSTE DE ÍNDICES: (10 columnas)
-    col_azul_res = [1, 3, 5, 6, 7, 8, 10]
-    for col_idx in col_azul_res:
-        for cell in list(ws_resumidas.columns)[col_idx-1]:
-            cell.fill = fill_celeste
-            
-    # La columna "Número Receptor" es la 9 (índice 8)
+    
+    # Aseguramos que solo se aplique el color rojo si no coincide el filtro.
     for fila in ws_resumidas.iter_rows(min_row=2):
         cell_receptor = fila[8] # Columna 9 (Índice 8)
+        
+        # Eliminar cualquier relleno residual en toda la fila (incluyendo Detalle, Código Moneda, T. Descuentos)
+        for i, cell in enumerate(fila):
+            # Solo aplicamos el relleno vacío si no es la celda del Número Receptor
+            if i != 8:
+                cell.fill = PatternFill(fill_type=None)
+            
+        # Aplicamos el color rojo (si aplica) o el relleno vacío
         if cell_receptor.value and numero_receptor_filtro and str(cell_receptor.value) != str(numero_receptor_filtro):
             cell_receptor.fill = fill_rojo
+        else:
+            cell_receptor.fill = PatternFill(fill_type=None)
         
         # APLICACIÓN DE FORMATO NUMÉRICO EXPLICITO
         # Índices de columnas de monto (0-based):
